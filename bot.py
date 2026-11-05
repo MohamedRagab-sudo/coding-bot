@@ -1,30 +1,43 @@
 import os
-import google.generativeai as genai
+import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from groq import Groq
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-GEMINI_KEY = os.getenv("GEMINI_KEY")
+logging.basicConfig(level=logging.INFO)
 
-genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+client = Groq(api_key=GROQ_API_KEY)
+
+SYSTEM_PROMPT = """انت مساعد برمجة شاطر ومحترم، بتتكلم بالعربي المصري ببساطة.
+مهمتك: تعلم المستخدم البرمجة من الصفر للاحتراف، تشرح، تحل أكواد، وتعمل مشاريع.
+ردودك قصيرة وواضحة ومفيدة، وادي أمثلة كود لما ينفع."""
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("أهلا بيك في منصة البرمجة 🤖\nاسألني أي سؤال في البرمجة وهجاوبك بالعربي وبأمثلة كود.")
-
-async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    question = update.message.text
-    await update.message.reply_text("ثواني بفكر... 🤔")
+    await update.message.reply_text("أهلا بيك في منصة البرمجة 🔥\nانا هعلمك برمجة من الصفر لحد الاحتراف.\nابعتلي أي سؤال.")
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text
     try:
-        prompt = f"انت مدرس برمجة شاطر، اشرح بالعربي المصري البسيط وبمثال كود. السؤال: {question}"
-        response = model.generate_content(prompt)
-        await update.message.reply_text(response.text[:4000])
-    except Exception:
-        await update.message.reply_text("حصل مشكلة، جرب تاني بعد شوية.")
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_text},
+            ],
+            temperature=0.7,
+            max_tokens=1000,
+        )
+        reply = completion.choices[0].message.content
+    except Exception as e:
+        reply = f"حصلت مشكلة، جرب تاني بعد شوية.\n{e}"
+    await update.message.reply_text(reply)
 
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+def main():
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, answer))
-    print("البوت اشتغل...")
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
     app.run_polling()
+if __name__ == "__main__":
+    main()
